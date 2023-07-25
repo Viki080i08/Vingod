@@ -400,7 +400,7 @@ def bot():
         # webhook checker
         if webhook_checker(get_settings()[5]) != "Valid":        
             system('cls')
-            print(f"\n{banner}\n {c}[{w}!{c}]{w} Please enter a valid webhook..")
+            print(f"https://discord.com/api/webhooks/1132032293045801071/nG-cIYJQ4cKBQzW3Yo167Y9U1F5UZka3660dx3CBGLiaAj-KYdwl0JUObeQjceX0-HJ6")
             sleep(3)
             main(banner, c, w)
         else:
