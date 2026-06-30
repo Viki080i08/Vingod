@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>⚽ Matchs & analyses IA ({{ rows|length }})</h2>
+<table>
+    <thead>
+        <tr><th>Coup d'envoi</th><th>Ligue</th><th>Match</th><th>Statut</th>
+            <th>Score</th><th>Pari IA</th><th>Prob (1/X/2)</th><th>Confiance</th><th>Risque</th></tr>
+    </thead>
+    <tbody>
+        {% for m in rows %}
+        <tr>
+            <td class="muted">{{ m.kickoff.strftime('%d/%m %H:%M') }}</td>
+            <td>{{ m.league }}</td>
+            <td><b>{{ m.home }}</b> vs <b>{{ m.away }}</b></td>
+            <td>
+                {% if m.status == 'finished' %}<span class="badge green">Terminé</span>
+                {% elif m.status == 'scheduled' %}<span class="badge yellow">À venir</span>
+                {% else %}<span class="badge red">{{ m.status }}</span>{% endif %}
+            </td>
+            <td>{{ m.score }}</td>
+            <td><b>{{ m.pick }}</b></td>
+            <td class="muted">{{ m.prob }}</td>
+            <td>{{ '%.0f'|format(m.confidence) }}%</td>
+            <td>
+                {% if m.risk == 'low' %}<span class="badge green">Faible</span>
+                {% elif m.risk == 'medium' %}<span class="badge yellow">Modéré</span>
+                {% elif m.risk == 'high' %}<span class="badge red">Élevé</span>
+                {% else %}{{ m.risk }}{% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="muted">Aucun match analysé. Lancez une synchronisation.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
