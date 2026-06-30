@@ -208,17 +208,24 @@ DATABASE_URL=postgresql+psycopg2://prono:prono@localhost:5432/prono
 | `SUBSCRIPTION_PRICE_EUR` | Prix de l'abonnement | `19.99` |
 | `SUBSCRIPTION_DURATION_DAYS` | Durée de l'abonnement | `30` |
 | `DATABASE_URL` | Connexion base de données | SQLite |
-| `DATA_PROVIDER` | `demo` ou `footballdata` | `demo` |
-| `FOOTBALL_DATA_API_KEY` | Clé football-data.org (si réel) | vide |
+| `DATA_PROVIDER` | `thesportsdb`, `footballdata` ou `demo` | `thesportsdb` |
+| `THESPORTSDB_API_KEY` | Clé TheSportsDB (`3` = test public) | `3` |
+| `FOOTBALL_DATA_API_KEY` | Clé football-data.org (si utilisé) | vide |
 | `FORECAST_HORIZON_DAYS` | Jours analysés (max 5) | `5` |
 | `DAILY_SYNC_TIME` / `DAILY_PUSH_TIME` / `RESULTS_UPDATE_TIME` | Heures des tâches | `06:00` / `09:00` / `23:30` |
 | `ADMIN_WEB_*` | Hôte, port, identifiants du dashboard | `0.0.0.0:8080`, `admin/changeme` |
 
-### Activer les vraies données football
-1. Créez une clé gratuite sur [football-data.org](https://www.football-data.org/).
-2. Dans `.env` : `DATA_PROVIDER=footballdata` et `FOOTBALL_DATA_API_KEY=...`.
-En cas d'erreur ou de quota dépassé, le système bascule automatiquement sur le
-fournisseur **demo** pour rester fonctionnel.
+### Sources de données
+- **`thesportsdb`** (défaut) : **vrais matchs du monde entier** — championnats,
+  Coupe du monde, amicaux, coupes… Gratuit, clé de test `3` par défaut (mettez
+  votre propre clé TheSportsDB pour une couverture/limite supérieure).
+- **`footballdata`** : alternative via [football-data.org](https://www.football-data.org/)
+  (clé gratuite requise) — `DATA_PROVIDER=footballdata` + `FOOTBALL_DATA_API_KEY=...`.
+- **`demo`/`internal`** : moteur 100% hors-ligne (matchs simulés, aucune API).
+
+En cas d'erreur réseau, de quota dépassé ou de journée sans match, le système
+**bascule automatiquement sur le moteur interne** pour rester fonctionnel.
+Les notes Elo des équipes **s'auto-améliorent** au fil des résultats réels.
 
 ### Activer les paiements Telegram
 1. `@BotFather` → votre bot → *Payments* → connectez un fournisseur (ex. Stripe).

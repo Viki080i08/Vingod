@@ -7,6 +7,7 @@ from ..logging_conf import get_logger
 from .base import SportsDataProvider
 from .demo import DemoProvider
 from .footballdata import FootballDataProvider
+from .thesportsdb import TheSportsDBProvider
 
 logger = get_logger(__name__)
 
@@ -14,19 +15,32 @@ logger = get_logger(__name__)
 def get_provider() -> SportsDataProvider:
     """Return the active data source.
 
-    By default PronoIA uses its own internal engine (no external sports API).
-    The optional football-data.org integration is only used when explicitly
-    enabled with a valid API key, and it silently falls back to the internal
-    engine on any error.
+    Default: TheSportsDB (real worldwide matches, free key). football-data.org
+    is available when a key is set. "demo"/"internal" uses the offline engine.
     """
+    provider = get_settings().data_provider
+
+    if provider in ("demo", "internal", "engine"):
+        logger.info("Using internal PronoIA engine (offline, no API).")
+        return DemoProvider()  # type: ignore[return-value]
+
+    if provider == "footballdata":
+        settings = get_settings()
+        if settings.football_data_api_key:
+            logger.info("Using football-data.org provider.")
+            return FootballDataProvider(settings.football_data_api_key)  # type: ignore[return-value]
+        logger.warning("FOOTBALL_DATA_API_KEY missing; using TheSportsDB instead.")
+
+    # Default + explicit "thesportsdb": real worldwide fixtures.
+    logger.info("Using TheSportsDB provider (real matches, all competitions).")
+    return TheSportsDBProvider(get_settings().thesportsdb_api_key)  # type: ignore[return-value]
+
+
+def provider_by_name(name: str) -> SportsDataProvider:
+    """Return a provider instance matching a stored match.provider value."""
     settings = get_settings()
-    if settings.data_provider == "footballdata" and settings.football_data_api_key:
-        logger.info("Using football-data.org provider")
+    if name == "footballdata" and settings.football_data_api_key:
         return FootballDataProvider(settings.football_data_api_key)  # type: ignore[return-value]
-    if settings.data_provider == "footballdata":
-        logger.warning(
-            "DATA_PROVIDER=footballdata but FOOTBALL_DATA_API_KEY missing; "
-            "falling back to the internal engine."
-        )
-    logger.info("Using internal PronoIA engine (no external sports API).")
+    if name == "thesportsdb":
+        return TheSportsDBProvider(settings.thesportsdb_api_key)  # type: ignore[return-value]
     return DemoProvider()  # type: ignore[return-value]

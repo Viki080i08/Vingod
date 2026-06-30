@@ -21,6 +21,8 @@ from ..db import repo
 from ..logging_conf import get_logger
 from ..providers import get_provider
 from ..providers.base import ProviderTeam
+from ..providers.demo import DemoProvider
+from ..providers.factory import provider_by_name
 
 logger = get_logger(__name__)
 
@@ -50,8 +52,18 @@ def sync_fixtures_and_analyse() -> dict:
     try:
         fixtures = provider.fetch_fixtures(settings.forecast_horizon_days)
     except Exception as exc:  # noqa: BLE001
-        logger.error("Provider fetch failed (%s); aborting sync.", exc)
-        return {"fixtures": 0, "analysed": 0, "error": str(exc)}
+        logger.error("Provider fetch failed (%s).", exc)
+        fixtures = []
+
+    # If the real source returned nothing (quiet day / outage), fall back to the
+    # internal engine so the bot always has matches to show.
+    if not fixtures and not isinstance(provider, DemoProvider):
+        logger.warning("Aucun match réel récupéré ; repli sur le moteur interne.")
+        try:
+            fixtures = DemoProvider().fetch_fixtures(settings.forecast_horizon_days)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Internal engine fallback failed: %s", exc)
+            return {"fixtures": 0, "analysed": 0, "error": str(exc)}
 
     created, updated, analysed = 0, 0, 0
 
@@ -141,7 +153,8 @@ def _update_form(team: Team, scored: int, conceded: int) -> None:
 
 def update_results_and_settle() -> dict:
     """Fetch results for past matches, settle tips/combos and learn from them."""
-    provider = get_provider()
+    from collections import defaultdict
+
     now = datetime.utcnow()
 
     with session_scope() as session:
@@ -153,14 +166,18 @@ def update_results_and_settle() -> dict:
         if not pending:
             return {"checked": 0, "settled": 0}
 
-        ext_ids = [m.external_id for m in pending]
-        try:
-            results = provider.fetch_results(ext_ids)
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Result fetch failed: %s", exc)
-            return {"checked": len(pending), "settled": 0, "error": str(exc)}
+        # Fetch results from each match's originating provider.
+        groups: dict[str, list[str]] = defaultdict(list)
+        for m in pending:
+            groups[m.provider].append(m.external_id)
 
-        results_by_id = {r.external_id: r for r in results}
+        results_by_id = {}
+        for pname, ext_ids in groups.items():
+            try:
+                for r in provider_by_name(pname).fetch_results(ext_ids):
+                    results_by_id[r.external_id] = r
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Result fetch failed for provider %s: %s", pname, exc)
         settled_matches = 0
 
         for match in pending:
