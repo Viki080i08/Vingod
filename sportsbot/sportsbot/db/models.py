@@ -113,6 +113,7 @@ class Team(Base):
     defense_rating: Mapped[float] = mapped_column(Float, default=1.0)
     key_absences: Mapped[int] = mapped_column(Integer, default=0)
     momentum: Mapped[float] = mapped_column(Float, default=0.0)  # -1..+1 trend
+    elo: Mapped[float] = mapped_column(Float, default=1500.0)  # learned strength rating
     extra: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     updated_at: Mapped[datetime] = mapped_column(

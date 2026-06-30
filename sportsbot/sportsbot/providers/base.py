@@ -21,6 +21,7 @@ class ProviderTeam:
     away_strength: float = 1.0
     key_absences: int = 0
     momentum: float = 0.0
+    elo: float = 1500.0
 
 
 @dataclass

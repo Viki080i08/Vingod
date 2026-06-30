@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import httpx
 from telegram import BotCommand
 from telegram.ext import Application, ApplicationBuilder
 
@@ -12,6 +13,34 @@ from ..scheduler.jobs import register_jobs
 from .handlers import register_handlers
 
 logger = get_logger(__name__)
+
+
+def verify_token(token: str) -> dict:
+    """Validate the bot token against Telegram's getMe endpoint.
+
+    Returns the bot info dict on success, raises RuntimeError with a clear,
+    actionable message on failure.
+    """
+    if not token:
+        raise RuntimeError(
+            "TELEGRAM_BOT_TOKEN manquant. Créez un bot avec @BotFather puis "
+            "renseignez le token dans le fichier .env."
+        )
+    try:
+        resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=15)
+    except httpx.HTTPError as exc:  # network problem
+        raise RuntimeError(f"Impossible de joindre Telegram : {exc}") from exc
+
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(
+            "Token Telegram invalide (réponse "
+            f"{data.get('error_code')}: {data.get('description')}).\n"
+            "👉 Le token a probablement été révoqué (il avait été partagé "
+            "publiquement). Générez-en un NOUVEAU via @BotFather "
+            "(/revoke puis /token) et mettez-le dans .env."
+        )
+    return data["result"]
 
 PUBLIC_COMMANDS = [
     BotCommand("start", "Démarrer / message de bienvenue"),
@@ -36,10 +65,8 @@ async def _post_init(application: Application) -> None:
 
 def build_application() -> Application:
     settings = get_settings()
-    if not settings.bot_token:
-        raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN manquant. Renseignez-le dans le fichier .env."
-        )
+    bot_info = verify_token(settings.bot_token)
+    logger.info("Token validé pour @%s (id=%s).", bot_info.get("username"), bot_info.get("id"))
 
     init_db()
 
@@ -56,6 +83,10 @@ def build_application() -> Application:
 
 
 def run_bot() -> None:
-    application = build_application()
-    logger.info("Starting bot (long polling)...")
+    try:
+        application = build_application()
+    except RuntimeError as exc:
+        logger.error("Démarrage impossible :\n%s", exc)
+        raise SystemExit(2) from exc
+    logger.info("Starting bot (long polling)... Ctrl+C pour arrêter.")
     application.run_polling(drop_pending_updates=True)

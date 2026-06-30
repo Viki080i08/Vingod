@@ -6,6 +6,7 @@ Usage:
     python -m sportsbot all      # run both (admin in a background thread)
     python -m sportsbot sync     # run a one-off fixtures sync + analysis
     python -m sportsbot initdb   # create database tables and exit
+    python -m sportsbot check    # validate config & Telegram token (diagnosis)
 """
 
 from __future__ import annotations
@@ -16,6 +17,29 @@ import threading
 from .logging_conf import get_logger, setup_logging
 
 logger = get_logger(__name__)
+
+
+def _run_check() -> None:
+    """Validate configuration and the Telegram token, print a clear report."""
+    from .bot.application import verify_token
+    from .config import get_settings
+
+    settings = get_settings()
+    print("🔎 Vérification de la configuration PronoIA\n")
+    print(f"  Base de données : {settings.database_url}")
+    print(f"  Source de données : {'football-data.org' if settings.data_provider=='footballdata' and settings.football_data_api_key else 'moteur interne (aucune API)'}")
+    print(f"  Horizon d'analyse : {settings.forecast_horizon_days} jours")
+    print(f"  Paiements : {'réels (Telegram Payments)' if settings.payments_enabled else 'mode démo'}")
+    print(f"  Admins : {settings.admin_ids or 'aucun défini'}")
+    print(f"  Dashboard web : http://{settings.admin_web_host}:{settings.admin_web_port}\n")
+
+    try:
+        info = verify_token(settings.bot_token)
+        print(f"  ✅ Token Telegram VALIDE — bot @{info.get('username')} (id={info.get('id')})")
+        print("\n➡️  Tout est prêt. Lancez :  python -m sportsbot all")
+    except RuntimeError as exc:
+        print(f"  ❌ {exc}")
+        raise SystemExit(1)
 
 
 def _run_admin_thread() -> None:
@@ -33,10 +57,14 @@ def main(argv: list[str] | None = None) -> None:
         "command",
         nargs="?",
         default="all",
-        choices=["bot", "admin", "all", "sync", "initdb"],
+        choices=["bot", "admin", "all", "sync", "initdb", "check"],
         help="Composant à lancer (défaut: all)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "check":
+        _run_check()
+        return
 
     if args.command == "initdb":
         from .db import init_db

@@ -12,7 +12,7 @@ from typing import List
 
 from sqlalchemy import select
 
-from ..ai.engine import analyse_match
+from ..ai.engine import analyse_match, update_elo
 from ..config import get_settings
 from ..db import session_scope
 from ..db.base import MatchStatus
@@ -36,6 +36,10 @@ def _apply_team_stats(team: Team, data: ProviderTeam) -> None:
     team.away_strength = data.away_strength
     team.key_absences = data.key_absences
     team.momentum = data.momentum
+    # Seed Elo from the provider only the first time; afterwards it is learned
+    # continuously from real results and must not be overwritten.
+    if not team.elo or team.elo == 1500.0:
+        team.elo = data.elo or 1500.0
 
 
 def sync_fixtures_and_analyse() -> dict:
@@ -169,6 +173,16 @@ def update_results_and_settle() -> dict:
 
             home_team = session.get(Team, match.home_team_id)
             away_team = session.get(Team, match.away_team_id)
+            if home_team and away_team:
+                # Continuous learning: update Elo ratings from the real result.
+                new_home_elo, new_away_elo = update_elo(
+                    home_team.elo or 1500.0,
+                    away_team.elo or 1500.0,
+                    res.home_score,
+                    res.away_score,
+                )
+                home_team.elo = round(new_home_elo, 1)
+                away_team.elo = round(new_away_elo, 1)
             if home_team:
                 _update_form(home_team, res.home_score, res.away_score)
             if away_team:

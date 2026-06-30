@@ -19,7 +19,13 @@ os.environ["LOG_LEVEL"] = "WARNING"
 
 
 def main() -> None:
-    from sportsbot.ai.engine import analyse_match, pick_for_profile
+    from sportsbot.ai.engine import (
+        analyse_match,
+        elo_expected_score,
+        pick_for_profile,
+        score_matrix,
+        update_elo,
+    )
     from sportsbot.ai.profiles import PROFILE_TUNING
     from sportsbot.db import init_db, session_scope
     from sportsbot.db import repo
@@ -31,6 +37,20 @@ def main() -> None:
 
     print("== init db ==")
     init_db()
+
+    print("== engine internals (Elo + Dixon-Coles) ==")
+    # Score matrix must be a normalised probability distribution.
+    matrix = score_matrix(1.6, 1.1)
+    total_mass = sum(sum(row) for row in matrix)
+    assert abs(total_mass - 1.0) < 1e-6, f"score matrix must sum to 1 (got {total_mass})"
+    # Elo expected score: stronger + home team should be clearly favoured.
+    e = elo_expected_score(1900, 1600)
+    assert e > 0.75, f"strong home side expected score too low: {e}"
+    # Elo learning: an underdog winning gains rating; favourite loses some.
+    new_h, new_a = update_elo(1500, 1800, home_goals=3, away_goals=0)
+    assert new_h > 1500 and new_a < 1800, "Elo must move toward the actual result"
+    print(f"   score-matrix mass={total_mass:.6f}; elo E(home)={e:.2f}; "
+          f"upset update 1500->{new_h:.1f}, 1800->{new_a:.1f}")
 
     print("== engine sanity ==")
     home = ProviderTeam(name="Strong FC", attack_rating=1.6, defense_rating=1.5,

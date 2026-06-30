@@ -1,21 +1,25 @@
-"""The PronoIA analysis engine.
+"""The PronoIA analysis engine — 100% maison, sans API sportive.
 
-Given two teams and their rolling statistics, the engine estimates a realistic
-probability distribution over the 1X2 outcomes using a Poisson goal model, then
-derives fair odds, a confidence score, a risk level, a value score and a
-human-readable explanation in French.
+This is a fully self-contained predictive model. It does NOT depend on any
+external sports API. It combines two complementary, well-established football
+modelling techniques and blends them for robustness:
 
-The model combines the data points requested in the brief:
-    * recent form
-    * previous results (goal averages)
-    * offensive / defensive statistics
+  1. An **Elo rating** system (like chess / FiveThirtyEight) that measures each
+     team's strength on a single scale and learns continuously from results.
+  2. A **bivariate Poisson goal model with the Dixon-Coles correction**, which
+     is the academic standard for football score prediction and notably fixes
+     the under-estimation of low scores (0-0, 1-0, 0-1, 1-1).
+
+On top of these it layers the contextual signals required by the brief:
+    * recent form              * home / away factor
+    * previous results          * key absences (injuries / suspensions)
+    * offensive / defensive     * recent trends (momentum)
     * head-to-head history
-    * home / away factor
-    * key absences (injuries / suspensions)
-    * recent trends (momentum)
 
-Everything is pure-Python (no heavy ML dependency) which keeps the engine fast,
-deterministic and fully explainable — important for a betting assistant.
+For each match it outputs a probability distribution, fair & market odds, a
+confidence score, a risk level, an expected-value score and a fully
+explainable analysis in French. Everything is pure-Python, deterministic and
+fast — no heavy ML dependency, no paid data feed.
 """
 
 from __future__ import annotations
@@ -40,6 +44,16 @@ ABSENCE_ATTACK_PENALTY = 0.045    # per key absence
 ABSENCE_DEFENSE_PENALTY = 0.04    # per key absence (concedes more)
 MOMENTUM_SWING = 0.12             # max +/- expected-goal swing from momentum
 
+# --- Elo model ---
+DEFAULT_ELO = 1500.0
+HOME_FIELD_ELO = 65.0             # Elo points granted by home advantage
+ELO_TO_GOALS = 0.0040             # goal supremacy per Elo point of difference
+ELO_BLEND = 0.50                  # weight of the Elo signal vs the goal model
+ELO_K = 24.0                      # Elo update speed when learning from results
+
+# --- Dixon-Coles low-score correlation ---
+DIXON_COLES_RHO = -0.08
+
 
 @dataclass
 class TeamSnapshot:
@@ -55,6 +69,7 @@ class TeamSnapshot:
     away_strength: float = 1.0
     key_absences: int = 0
     momentum: float = 0.0
+    elo: float = DEFAULT_ELO
 
     @classmethod
     def from_team(cls, team) -> "TeamSnapshot":
@@ -69,6 +84,7 @@ class TeamSnapshot:
             away_strength=team.away_strength or 1.0,
             key_absences=team.key_absences or 0,
             momentum=team.momentum or 0.0,
+            elo=getattr(team, "elo", None) or DEFAULT_ELO,
         )
 
 
@@ -164,14 +180,47 @@ def _expected_goals(
     return _clamp(exp, 0.15, 4.5)
 
 
-def _outcome_probabilities(exp_home: float, exp_away: float) -> Tuple[float, float, float]:
-    """1X2 probabilities from a Poisson score matrix."""
-    p_home = p_draw = p_away = 0.0
+def _dixon_coles_tau(i: int, j: int, lam: float, mu: float, rho: float) -> float:
+    """Dixon-Coles correction factor for low-scoring correlated outcomes."""
+    if i == 0 and j == 0:
+        return 1.0 - lam * mu * rho
+    if i == 0 and j == 1:
+        return 1.0 + lam * rho
+    if i == 1 and j == 0:
+        return 1.0 + mu * rho
+    if i == 1 and j == 1:
+        return 1.0 - rho
+    return 1.0
+
+
+def score_matrix(exp_home: float, exp_away: float) -> list[list[float]]:
+    """Full (Dixon-Coles corrected) probability matrix of exact scores."""
     home_pmf = [_poisson_pmf(i, exp_home) for i in range(MAX_GOALS + 1)]
     away_pmf = [_poisson_pmf(j, exp_away) for j in range(MAX_GOALS + 1)]
+    matrix = [[0.0] * (MAX_GOALS + 1) for _ in range(MAX_GOALS + 1)]
+    total = 0.0
     for i in range(MAX_GOALS + 1):
         for j in range(MAX_GOALS + 1):
-            p = home_pmf[i] * away_pmf[j]
+            p = home_pmf[i] * away_pmf[j] * _dixon_coles_tau(
+                i, j, exp_home, exp_away, DIXON_COLES_RHO
+            )
+            p = max(p, 0.0)
+            matrix[i][j] = p
+            total += p
+    if total > 0:
+        for i in range(MAX_GOALS + 1):
+            for j in range(MAX_GOALS + 1):
+                matrix[i][j] /= total
+    return matrix
+
+
+def _outcome_probabilities(exp_home: float, exp_away: float) -> Tuple[float, float, float]:
+    """1X2 probabilities from the Dixon-Coles corrected score matrix."""
+    matrix = score_matrix(exp_home, exp_away)
+    p_home = p_draw = p_away = 0.0
+    for i in range(MAX_GOALS + 1):
+        for j in range(MAX_GOALS + 1):
+            p = matrix[i][j]
             if i > j:
                 p_home += p
             elif i == j:
@@ -182,6 +231,37 @@ def _outcome_probabilities(exp_home: float, exp_away: float) -> Tuple[float, flo
     if total <= 0:
         return 1 / 3, 1 / 3, 1 / 3
     return p_home / total, p_draw / total, p_away / total
+
+
+def elo_expected_score(elo_home: float, elo_away: float) -> float:
+    """Elo expected score for the home side (0..1), including home advantage."""
+    diff = (elo_home + HOME_FIELD_ELO) - elo_away
+    return 1.0 / (1.0 + 10 ** (-diff / 400.0))
+
+
+def _elo_goal_supremacy(elo_home: float, elo_away: float) -> float:
+    """Convert an Elo difference into an expected home goal supremacy."""
+    diff = (elo_home + HOME_FIELD_ELO) - elo_away
+    return _clamp(diff * ELO_TO_GOALS, -2.6, 2.6)
+
+
+def update_elo(elo_home: float, elo_away: float, home_goals: int, away_goals: int) -> Tuple[float, float]:
+    """Return updated Elo ratings after a result (used for continuous learning).
+
+    Uses a goal-difference multiplier so that heavy wins move ratings more,
+    mirroring the FiveThirtyEight approach.
+    """
+    if home_goals > away_goals:
+        actual = 1.0
+    elif home_goals < away_goals:
+        actual = 0.0
+    else:
+        actual = 0.5
+    expected = elo_expected_score(elo_home, elo_away)
+    margin = abs(home_goals - away_goals)
+    multiplier = math.log(max(margin, 1) + 1.0)  # 0.69 for 1-goal, grows slowly
+    change = ELO_K * multiplier * (actual - expected)
+    return elo_home + change, elo_away - change
 
 
 def _apply_head_to_head(
@@ -273,6 +353,10 @@ def _build_explanation(
         f"Score attendu (xG) : {exp_home:.1f} - {exp_away:.1f}, "
         f"avantage à *{favourite}*."
     )
+    factors["Force (Elo)"] = (
+        f"{home.name} {home.elo:.0f} vs {away.name} {away.elo:.0f} "
+        f"(écart {home.elo - away.elo:+.0f})"
+    )
 
     # Form
     fh, fa = _form_score(home.recent_form), _form_score(away.recent_form)
@@ -346,8 +430,19 @@ def analyse_match(
     home = TeamSnapshot.from_team(home_team) if not isinstance(home_team, TeamSnapshot) else home_team
     away = TeamSnapshot.from_team(away_team) if not isinstance(away_team, TeamSnapshot) else away_team
 
-    exp_home = _expected_goals(home, away, is_home=True)
-    exp_away = _expected_goals(away, home, is_home=False)
+    # Signal 1: goal model from attack/defense, form, home/away, absences.
+    gm_home = _expected_goals(home, away, is_home=True)
+    gm_away = _expected_goals(away, home, is_home=False)
+
+    # Signal 2: Elo ratings translated into expected goals.
+    supremacy = _elo_goal_supremacy(home.elo, away.elo)
+    total_goals = _clamp(gm_home + gm_away, 1.4, 4.4)
+    elo_home = _clamp((total_goals + supremacy) / 2, 0.15, 4.5)
+    elo_away = _clamp((total_goals - supremacy) / 2, 0.15, 4.5)
+
+    # Blend both signals for a robust expected-goals estimate.
+    exp_home = _clamp(ELO_BLEND * elo_home + (1 - ELO_BLEND) * gm_home, 0.12, 4.6)
+    exp_away = _clamp(ELO_BLEND * elo_away + (1 - ELO_BLEND) * gm_away, 0.12, 4.6)
 
     probs = _outcome_probabilities(exp_home, exp_away)
     probs = _apply_head_to_head(probs, head_to_head)
@@ -369,9 +464,10 @@ def analyse_match(
 
     # Data quality: penalise missing form strings / default ratings.
     data_quality = 0.0
-    data_quality += 0.5 if (home.recent_form and away.recent_form) else 0.0
-    data_quality += 0.25 if head_to_head else 0.0
-    data_quality += 0.25 if (home.attack_rating != 1.0 or away.attack_rating != 1.0) else 0.0
+    data_quality += 0.4 if (home.recent_form and away.recent_form) else 0.0
+    data_quality += 0.2 if head_to_head else 0.0
+    data_quality += 0.2 if (home.attack_rating != 1.0 or away.attack_rating != 1.0) else 0.0
+    data_quality += 0.2 if (home.elo != DEFAULT_ELO or away.elo != DEFAULT_ELO) else 0.0
 
     confidence = _confidence(probs, data_quality)
     risk_level = _risk_level(recommended_prob)

@@ -31,20 +31,31 @@ programmées et un **dashboard administrateur web**.
 - Commandes : `/start`, `/menu`, `/pronos`, `/profil`, `/combine`, `/ia`,
   `/stats`, `/abonnement`, `/parametres`, `/aide`, `/whoami`
 
-### 🧠 Moteur d'analyse IA
-Pour chaque match, l'IA estime une distribution de probabilités (modèle de
-Poisson sur les buts attendus) à partir des données disponibles :
-- forme récente des équipes
-- résultats précédents (moyennes de buts)
-- statistiques offensives / défensives
-- historique des confrontations directes
-- facteur domicile / extérieur
-- absences importantes (blessures / suspensions)
-- tendances récentes (momentum)
+### 🧠 Moteur d'analyse IA — 100% maison, **sans API sportive**
+L'IA est entièrement développée dans ce projet et **ne dépend d'aucune API
+sportive externe**. Elle combine deux techniques de référence puis les fusionne
+pour plus de robustesse :
 
-Elle produit pour chaque rencontre : **probabilité estimée**, **niveau de
-confiance**, **niveau de risque**, **cotes**, **valeur attendue** et une
-**explication détaillée** en français.
+1. **Système de notes Elo** (comme aux échecs / FiveThirtyEight) : une note de
+   force par équipe, qui **s'auto-améliore en continu** à partir des résultats.
+2. **Modèle de buts de Poisson avec correction de Dixon-Coles** (standard
+   académique du football), qui corrige notamment la sous-estimation des petits
+   scores (0-0, 1-0, 0-1, 1-1).
+
+S'y ajoutent les signaux contextuels : forme récente, résultats précédents,
+stats offensives/défensives, confrontations directes, domicile/extérieur,
+absences importantes, tendances (momentum).
+
+Pour chaque rencontre, l'IA produit : **probabilité estimée**, **niveau de
+confiance**, **niveau de risque**, **cotes (équitables et marché)**, **valeur
+attendue** et une **explication détaillée** en français. Tout est pur-Python,
+déterministe et rapide — aucune dépendance ML lourde, aucun flux de données
+payant.
+
+Le **moteur interne** maintient une table de **notes de force réalistes** pour
+les grands clubs européens, génère un calendrier cohérent de matchs (jour J +
+jusqu'à 5 jours) et met à jour les notes Elo à mesure que les résultats
+tombent : le modèle s'améliore donc tout seul, sans intervention.
 
 ### 🎯 Personnalisation par profil
 - 🟢 **Sécurisé** — privilégie les plus fortes probabilités
@@ -132,12 +143,40 @@ fonctionne donc immédiatement, hors-ligne.
 
 ### Commandes CLI
 ```bash
+python -m sportsbot check    # diagnostic : vérifie la config + le token
 python -m sportsbot bot      # bot Telegram uniquement
 python -m sportsbot admin    # dashboard web uniquement
 python -m sportsbot all      # les deux (dashboard dans un thread)
 python -m sportsbot sync     # synchronisation + analyse ponctuelle
 python -m sportsbot initdb   # créer les tables et quitter
 ```
+
+> 💡 Commencez **toujours** par `python -m sportsbot check` : il confirme que
+> votre token Telegram est valide avant de lancer le bot.
+
+## 🟢 Faire tourner le bot en continu (24/7)
+
+Le bot doit tourner sur une machine **toujours allumée** (votre serveur, un VPS,
+un Raspberry Pi, un PaaS…). Deux options « tout le temps jusqu'à désactivation » :
+
+**Option A — script auto-redémarrage** (simple) :
+```bash
+./scripts/run_forever.sh      # relance automatiquement en cas d'arrêt
+```
+
+**Option B — service systemd** (recommandé sur serveur Linux) :
+```bash
+sudo cp deploy/pronoia.service /etc/systemd/system/pronoia.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now pronoia     # démarre + relance au boot
+journalctl -u pronoia -f                # voir les logs en direct
+# Pour désactiver : sudo systemctl stop pronoia
+```
+
+**Option C — Docker** : `docker compose up -d --build` (redémarre tout seul).
+
+> ⚠️ Tant qu'aucun de ces processus ne tourne sur une machine allumée, cliquer
+> dans Telegram ne déclenche rien : c'est lui qui « écoute » et répond.
 
 ---
 
