@@ -66,9 +66,10 @@ class Settings:
     database_url: str = "sqlite:///pronoia.db"
 
     # Data provider
-    data_provider: str = "thesportsdb"
+    data_provider: str = "auto"
     football_data_api_key: str = ""
     thesportsdb_api_key: str = "3"
+    apifootball_api_key: str = ""
     forecast_horizon_days: int = 5
 
     # Scheduled jobs
@@ -114,9 +115,10 @@ def get_settings() -> Settings:
         subscription_currency=os.getenv("SUBSCRIPTION_CURRENCY", "EUR").strip() or "EUR",
         subscription_duration_days=int(os.getenv("SUBSCRIPTION_DURATION_DAYS", "30") or 30),
         database_url=os.getenv("DATABASE_URL", "sqlite:///pronoia.db").strip(),
-        data_provider=os.getenv("DATA_PROVIDER", "thesportsdb").strip().lower() or "thesportsdb",
+        data_provider=os.getenv("DATA_PROVIDER", "auto").strip().lower() or "auto",
         football_data_api_key=os.getenv("FOOTBALL_DATA_API_KEY", "").strip(),
         thesportsdb_api_key=os.getenv("THESPORTSDB_API_KEY", "3").strip() or "3",
+        apifootball_api_key=os.getenv("APIFOOTBALL_API_KEY", "").strip(),
         forecast_horizon_days=horizon,
         daily_sync_time=_parse_time(os.getenv("DAILY_SYNC_TIME", ""), "06:00"),
         daily_push_time=_parse_time(os.getenv("DAILY_PUSH_TIME", ""), "09:00"),

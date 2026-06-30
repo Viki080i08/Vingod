@@ -215,17 +215,27 @@ DATABASE_URL=postgresql+psycopg2://prono:prono@localhost:5432/prono
 | `DAILY_SYNC_TIME` / `DAILY_PUSH_TIME` / `RESULTS_UPDATE_TIME` | Heures des tâches | `06:00` / `09:00` / `23:30` |
 | `ADMIN_WEB_*` | Hôte, port, identifiants du dashboard | `0.0.0.0:8080`, `admin/changeme` |
 
-### Sources de données
-- **`thesportsdb`** (défaut) : **vrais matchs du monde entier** — championnats,
-  Coupe du monde, amicaux, coupes… Gratuit, clé de test `3` par défaut (mettez
-  votre propre clé TheSportsDB pour une couverture/limite supérieure).
-- **`footballdata`** : alternative via [football-data.org](https://www.football-data.org/)
-  (clé gratuite requise) — `DATA_PROVIDER=footballdata` + `FOOTBALL_DATA_API_KEY=...`.
-- **`demo`/`internal`** : moteur 100% hors-ligne (matchs simulés, aucune API).
+### Sources de données (`DATA_PROVIDER=auto` par défaut)
+Le mode `auto` choisit la meilleure source selon les clés fournies :
+
+1. **API-Football** ⭐ (recommandé) — **TOUS les vrais matchs du jour** : toutes
+   les ligues, **Coupe du monde**, **amicaux**, coupes. Plan **gratuit** (100
+   requêtes/jour) sur [api-football.com](https://www.api-football.com/). Mettez
+   la clé dans `APIFOOTBALL_API_KEY` → le bot l'utilise automatiquement.
+2. **football-data.org** — vrais matchs majeurs + Coupe du monde. Clé gratuite,
+   `FOOTBALL_DATA_API_KEY`.
+3. **TheSportsDB** (clé de test `3`) — **couverture PARTIELLE** (sample gratuit :
+   quelques ligues seulement). Utilisé en dernier recours, sans clé.
+4. **`demo`/`internal`** — moteur 100% hors-ligne (matchs simulés, aucune API).
+
+> ⚠️ **Important** : sans clé API, la couverture est très limitée (la clé de test
+> publique ne renvoie qu'un échantillon). Pour voir **tous les vrais matchs du
+> jour avec les analyses**, ajoutez une clé **API-Football gratuite** — c'est la
+> seule façon d'avoir des données réelles complètes.
 
 En cas d'erreur réseau, de quota dépassé ou de journée sans match, le système
-**bascule automatiquement sur le moteur interne** pour rester fonctionnel.
-Les notes Elo des équipes **s'auto-améliorent** au fil des résultats réels.
+**bascule automatiquement sur le moteur interne**. Les notes Elo des équipes
+**s'auto-améliorent** au fil des résultats réels.
 
 ### Activer les paiements Telegram
 1. `@BotFather` → votre bot → *Payments* → connectez un fournisseur (ex. Stripe).

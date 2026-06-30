@@ -27,7 +27,14 @@ def _run_check() -> None:
     settings = get_settings()
     print("🔎 Vérification de la configuration PronoIA\n")
     print(f"  Base de données : {settings.database_url}")
-    print(f"  Source de données : {'football-data.org' if settings.data_provider=='footballdata' and settings.football_data_api_key else 'moteur interne (aucune API)'}")
+    if settings.apifootball_api_key:
+        src = "API-Football (TOUS les vrais matchs ✅)"
+    elif settings.football_data_api_key:
+        src = "football-data.org (vrais matchs majeurs + Coupe du monde)"
+    else:
+        src = ("TheSportsDB clé de test — COUVERTURE LIMITÉE ⚠️  "
+               "(ajoutez APIFOOTBALL_API_KEY gratuit pour tous les matchs)")
+    print(f"  Source de données : {src}")
     print(f"  Horizon d'analyse : {settings.forecast_horizon_days} jours")
     print(f"  Paiements : {'réels (Telegram Payments)' if settings.payments_enabled else 'mode démo'}")
     print(f"  Admins : {settings.admin_ids or 'aucun défini'}")
