@@ -171,4 +171,8 @@ def run_admin() -> None:
         host=settings.admin_web_host,
         port=settings.admin_web_port,
         log_level=settings.log_level.lower(),
+        # Force the standard asyncio loop. Otherwise uvicorn installs the
+        # uvloop event-loop policy process-wide, which breaks the Telegram
+        # bot's long polling running in the main thread.
+        loop="asyncio",
     )

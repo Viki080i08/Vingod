@@ -8,10 +8,12 @@ from telegram.ext import ContextTypes
 
 from ...config import get_settings
 from ...db import repo, session_scope
+from ...services import promo as promo_service
 from .. import keyboards, texts
 from ..utils import esc, sync_user_from_update
 
 INVOICE_PAYLOAD_PREFIX = "pronoia-sub"
+AWAITING_PROMO_KEY = "awaiting_promo"
 
 
 async def subscription_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -119,6 +121,60 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         "Profite de tous les pronostics et analyses IA. 🚀",
         parse_mode=ParseMode.HTML,
     )
+
+
+async def subscription_promo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User tapped the promo-code button: wait for the next message as the code."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data[AWAITING_PROMO_KEY] = True
+    await query.edit_message_text(
+        "🎁 <b>Code promo</b>\n\n"
+        "Envoyez votre code dans un message (ex. <code>pronokiff</code>).\n"
+        "Vous pouvez aussi utiliser la commande : <code>/code pronokiff</code>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def apply_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE, code: str) -> None:
+    """Validate and apply a promo code, then reply with the outcome."""
+    context.user_data.pop(AWAITING_PROMO_KEY, None)
+    code = (code or "").strip()
+    if not code:
+        await update.effective_message.reply_text(
+            "Veuillez indiquer un code. Exemple : /code pronokiff"
+        )
+        return
+
+    with session_scope() as session:
+        user = repo.get_user(session, update.effective_user.id)
+        if user is None:
+            user, _ = repo.get_or_create_user(session, update.effective_user.id)
+        result = promo_service.redeem(session, user, code)
+
+    if result["ok"]:
+        await update.effective_message.reply_text(
+            f"🎉 <b>Code « {esc(code)} » activé !</b>\n\n"
+            f"Vous bénéficiez de <b>{result['label']}</b> "
+            f"({result['days']} jours).\n"
+            f"Accès Premium actif jusqu'au <b>{result['expiry']:%d/%m/%Y}</b>.\n\n"
+            "Profitez de tous les pronostics et analyses IA. 🚀",
+            parse_mode=ParseMode.HTML,
+        )
+    elif result["reason"] == "already_used":
+        await update.effective_message.reply_text(
+            "⚠️ Vous avez déjà utilisé ce code promo."
+        )
+    else:
+        await update.effective_message.reply_text(
+            "❌ Code promo invalide. Vérifiez l'orthographe et réessayez."
+        )
+
+
+async def code_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    sync_user_from_update(update)
+    code = " ".join(context.args) if context.args else ""
+    await apply_promo_code(update, context, code)
 
 
 async def subscription_history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

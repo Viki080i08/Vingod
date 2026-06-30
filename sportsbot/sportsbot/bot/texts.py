@@ -80,6 +80,7 @@ def help_message() -> str:
         "/ia — analyse IA des matchs\n"
         "/stats — statistiques de performance\n"
         "/abonnement — gérer mon abonnement\n"
+        "/code — utiliser un code promo (ex. /code pronokiff)\n"
         "/parametres — réglages\n"
         "/whoami — afficher mon identifiant Telegram\n"
         "/aide — afficher cette aide\n"
@@ -203,7 +204,10 @@ def subscription_info(snapshot: dict, price: float, currency: str, days: int, pa
         "• Tous les pronostics du jour et des 5 prochains jours\n"
         "• Analyses IA détaillées de chaque match\n"
         "• Combinés optimisés selon ton profil\n"
-        "• Réception automatique des meilleurs paris\n"
+        "• Réception automatique des meilleurs paris\n\n"
+        "🎁 <b>Code promo</b> : utilisez le bouton ci-dessous ou la commande "
+        "<code>/code VOTRECODE</code>. Essayez <code>pronokiff</code> pour "
+        "<b>1 semaine gratuite</b> !\n"
         f"{mode}"
     )
 

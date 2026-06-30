@@ -111,6 +111,7 @@ def subscription_keyboard(payments_enabled: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton(label, callback_data="sub:buy")],
+            [InlineKeyboardButton("🎁 J'ai un code promo", callback_data="sub:promo")],
             [InlineKeyboardButton("📜 Historique paiements", callback_data="sub:history")],
         ]
     )

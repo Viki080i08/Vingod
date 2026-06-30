@@ -252,6 +252,21 @@ class ComboSelection(Base):
     match: Mapped["Match"] = relationship()
 
 
+class PromoRedemption(Base):
+    """Tracks which promo codes a user has already redeemed (one use each)."""
+
+    __tablename__ = "promo_redemptions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "code", name="uq_promo_user_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    code: Mapped[str] = mapped_column(String(64), index=True)
+    days: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class UserComboDraft(Base):
     """Transient storage of a user's in-progress combo selections."""
 

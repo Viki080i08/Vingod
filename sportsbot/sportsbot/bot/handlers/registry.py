@@ -44,8 +44,17 @@ _TEXT_ROUTES = {
 
 
 async def _text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    handler = _TEXT_ROUTES.get((update.effective_message.text or "").strip())
+    text = (update.effective_message.text or "").strip()
+    handler = _TEXT_ROUTES.get(text)
+
+    # If we are waiting for a promo code and the user did not tap a menu button,
+    # treat the message as the promo code.
+    if context.user_data.get(subscription.AWAITING_PROMO_KEY) and handler is None:
+        await subscription.apply_promo_code(update, context, text)
+        return
+
     if handler:
+        context.user_data.pop(subscription.AWAITING_PROMO_KEY, None)
         await handler(update, context)
     else:
         await start.menu_command(update, context)
@@ -64,6 +73,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("ia", predictions.ai_command))
     application.add_handler(CommandHandler("stats", stats.stats_command))
     application.add_handler(CommandHandler("abonnement", subscription.subscription_command))
+    application.add_handler(CommandHandler("code", subscription.code_command))
     application.add_handler(CommandHandler("parametres", settings.settings_command))
 
     # --- Admin commands ---
@@ -89,6 +99,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CallbackQueryHandler(combo.combo_ai_callback, pattern=r"^combo:ai$"))
 
     application.add_handler(CallbackQueryHandler(subscription.subscription_buy_callback, pattern=r"^sub:buy$"))
+    application.add_handler(CallbackQueryHandler(subscription.subscription_promo_callback, pattern=r"^sub:promo$"))
     application.add_handler(CallbackQueryHandler(subscription.subscription_history_callback, pattern=r"^sub:history$"))
 
     application.add_handler(CallbackQueryHandler(settings.settings_profile_callback, pattern=r"^set:profile$"))

@@ -51,6 +51,7 @@ PUBLIC_COMMANDS = [
     BotCommand("ia", "Analyse IA des matchs"),
     BotCommand("stats", "Statistiques de performance"),
     BotCommand("abonnement", "Gérer mon abonnement"),
+    BotCommand("code", "Utiliser un code promo (ex. pronokiff)"),
     BotCommand("parametres", "Réglages"),
     BotCommand("aide", "Aide"),
     BotCommand("whoami", "Afficher mon identifiant Telegram"),
@@ -83,10 +84,20 @@ def build_application() -> Application:
 
 
 def run_bot() -> None:
+    import asyncio
+
     try:
         application = build_application()
     except RuntimeError as exc:
         logger.error("Démarrage impossible :\n%s", exc)
         raise SystemExit(2) from exc
+
+    # Ensure the main thread has a usable event loop even if another component
+    # (e.g. the admin web server) altered the global event-loop policy.
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
     logger.info("Starting bot (long polling)... Ctrl+C pour arrêter.")
     application.run_polling(drop_pending_updates=True)
