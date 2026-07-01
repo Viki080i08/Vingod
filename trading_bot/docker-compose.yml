@@ -1,0 +1,25 @@
+# Run the bot 24/7 with automatic restart.
+#   docker compose up -d --build
+services:
+  trading-bot:
+    build:
+      context: ..
+      dockerfile: trading_bot/Dockerfile
+    image: trading-ai-bot:latest
+    container_name: trading-ai-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /data/trading_bot.db
+    volumes:
+      - trading_bot_data:/data
+    # Bot uses long-polling (outbound only) - no ports to expose.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  trading_bot_data:

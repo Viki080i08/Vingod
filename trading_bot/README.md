@@ -129,6 +129,39 @@ Depuis la racine du dépôt :
 python -m trading_bot.main
 ```
 
+## 🌐 Déploiement 24/7
+
+Le bot utilise le *long-polling* (connexions sortantes uniquement, aucun port à
+ouvrir). Pour qu'il tourne en continu, hébergez-le sur une machine persistante
+(VPS, Raspberry Pi, ou une plateforme type Railway / Fly.io / Render).
+
+### Option A — Docker (recommandé)
+
+```bash
+cd trading_bot
+cp .env.example .env         # renseignez TELEGRAM_BOT_TOKEN
+docker compose up -d --build # démarre en arrière-plan, redémarre tout seul
+docker compose logs -f       # suivre les logs
+```
+
+`restart: unless-stopped` relance le conteneur automatiquement en cas de crash
+ou de redémarrage du serveur. La base SQLite est persistée dans un volume Docker.
+
+### Option B — systemd (serveur Linux)
+
+```bash
+# Dépôt cloné dans /opt/Vingod, dépendances installées, .env configuré
+sudo cp trading_bot/deploy/trading-bot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now trading-bot   # démarre + activation au boot
+journalctl -u trading-bot -f              # logs en direct
+```
+
+`Restart=always` garantit le redémarrage automatique.
+
+> ℹ️ Un unique processus doit interroger l'API Telegram à la fois. Ne lancez pas
+> deux instances avec le même token (sinon conflit de polling).
+
 ## 🧪 Tests
 
 ```bash
