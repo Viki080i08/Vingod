@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 START_TEXT = (
     "👋 <b>Bienvenue sur l'Assistant IA de Trading</b>\n\n"
+    "Bot actif ✅ — je suis prêt à analyser les marchés.\n\n"
     "Je combine analyse technique, fondamentale, quantitative et machine learning "
     "pour repérer les meilleures configurations de marché en temps réel "
     "(crypto, forex, actions, indices).\n\n"

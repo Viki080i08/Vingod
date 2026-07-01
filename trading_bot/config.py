@@ -16,12 +16,17 @@ _PACKAGE_DIR = Path(__file__).resolve().parent
 try:
     from dotenv import load_dotenv
 
-    # Load .env from the trading_bot package dir first (works no matter where
-    # you launch `python -m trading_bot.main` from), then allow CWD overrides.
-    load_dotenv(_PACKAGE_DIR / ".env")
+    # Package .env wins over inherited shell env (common source of broken tokens
+    # with stray newlines when copy-pasted into a hosting dashboard).
+    load_dotenv(_PACKAGE_DIR / ".env", override=True)
     load_dotenv()
 except Exception:  # pragma: no cover - dotenv is optional at runtime
     pass
+
+
+def _clean_token(raw: str) -> str:
+    """Strip whitespace / newlines accidentally pasted into a bot token."""
+    return raw.strip().replace("\n", "").replace("\r", "").replace(" ", "")
 
 
 def _get_int(name: str, default: int) -> int:
@@ -63,7 +68,9 @@ def _get_int_list(name: str) -> List[int]:
 class Settings:
     """Application settings resolved from the environment."""
 
-    telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", "").strip())
+    telegram_bot_token: str = field(
+        default_factory=lambda: _clean_token(os.getenv("TELEGRAM_BOT_TOKEN", ""))
+    )
     admin_user_ids: List[int] = field(default_factory=lambda: _get_int_list("ADMIN_USER_IDS"))
     alerts_chat_id: str = field(default_factory=lambda: os.getenv("ALERTS_CHAT_ID", "").strip())
 
@@ -100,8 +107,17 @@ class Settings:
     def validate(self) -> None:
         if not self.telegram_bot_token:
             raise RuntimeError(
-                "TELEGRAM_BOT_TOKEN is not set. Copy .env.example to .env and set your "
-                "bot token (create one with @BotFather)."
+                "TELEGRAM_BOT_TOKEN est vide. Copiez trading_bot/.env.example vers "
+                "trading_bot/.env et collez votre token (créé via @BotFather)."
+            )
+        if "\n" in self.telegram_bot_token or " " in self.telegram_bot_token:
+            raise RuntimeError(
+                "TELEGRAM_BOT_TOKEN invalide (espaces ou retours à la ligne détectés). "
+                "Recopiez le token sur une seule ligne dans trading_bot/.env"
+            )
+        if ":" not in self.telegram_bot_token or len(self.telegram_bot_token) < 20:
+            raise RuntimeError(
+                "TELEGRAM_BOT_TOKEN invalide. Format attendu : 123456789:ABCdefGHI..."
             )
 
     def configure_logging(self) -> None:

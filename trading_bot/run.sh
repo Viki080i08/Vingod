@@ -23,4 +23,5 @@ echo "Installation des dépendances (si nécessaire)…"
 pip3 install -q -r trading_bot/requirements.txt 2>/dev/null || pip install -q -r trading_bot/requirements.txt
 
 echo "Démarrage du bot…"
+echo "⚠️  Ne lancez qu'UNE seule instance (sinon Telegram renvoie Conflict)."
 exec python3 -m trading_bot.main
