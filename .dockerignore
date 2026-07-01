@@ -1,0 +1,13 @@
+# Reduce Docker build context (build context is the repo root).
+.git
+.venv
+venv
+vingod-src
+*.exe
+**/__pycache__
+*.pyc
+*.db
+*.sqlite3
+*.log
+**/.env
+!trading_bot

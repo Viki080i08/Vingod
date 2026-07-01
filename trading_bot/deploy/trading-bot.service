@@ -1,0 +1,32 @@
+# systemd service for running the Trading AI Telegram bot 24/7 on a Linux server.
+#
+# Install:
+#   sudo cp trading_bot/deploy/trading-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now trading-bot
+#
+# Check status / logs:
+#   systemctl status trading-bot
+#   journalctl -u trading-bot -f
+#
+# Adjust User, WorkingDirectory and the .env path to match your server.
+
+[Unit]
+Description=Trading AI Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trader
+WorkingDirectory=/opt/Vingod
+EnvironmentFile=/opt/Vingod/trading_bot/.env
+ExecStart=/usr/bin/python3 -m trading_bot.main
+Restart=always
+RestartSec=5
+# Basic hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
