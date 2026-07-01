@@ -154,10 +154,40 @@ python -m sportsbot initdb   # créer les tables et quitter
 > 💡 Commencez **toujours** par `python -m sportsbot check` : il confirme que
 > votre token Telegram est valide avant de lancer le bot.
 
-## 🟢 Faire tourner le bot en continu (24/7)
+## 🟢 Faire tourner le bot 24/7 (sans garder Cursor ouvert)
 
-Le bot doit tourner sur une machine **toujours allumée** (votre serveur, un VPS,
-un Raspberry Pi, un PaaS…). Deux options « tout le temps jusqu'à désactivation » :
+Le bot doit tourner sur une machine **toujours allumée**, indépendante de votre
+PC et de Cursor. Une fois déployé, vous pouvez **fermer Cursor et éteindre votre
+ordinateur** : le bot continue de répondre.
+
+### ⭐ Méthode la plus simple : petit VPS + script automatique
+
+1. **Louez un VPS** (~3-5 €/mois) chez Hetzner, Contabo, OVH, DigitalOcean, Ionos…
+   Choisissez **Ubuntu 22.04/24.04**. Vous recevez une **IP** et un mot de passe.
+2. **Connectez-vous en SSH** depuis votre PC :
+   ```bash
+   ssh root@VOTRE_IP_SERVEUR
+   ```
+3. **Lancez le script d'installation** (il fait tout : dépendances, code,
+   configuration, service qui redémarre tout seul) :
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Viki080i08/Vingod/cursor/telegram-sports-prediction-bot-d3d7/sportsbot/scripts/install_vps.sh -o install.sh
+   bash install.sh
+   ```
+   Le script vous demandera votre **token Telegram**, votre **clé API-Football**
+   et votre **ID admin**, puis démarrera le bot.
+4. C'est fini. Le bot tourne 24/7 et **redémarre automatiquement** en cas de
+   coupure ou de reboot du serveur.
+   - Voir les logs : `journalctl -u pronoia -f`
+   - Arrêter : `sudo systemctl stop pronoia`
+
+### Alternative : plateforme cloud (Railway / Render / Fly.io)
+Connectez le dépôt GitHub, choisissez un service de type *worker*, définissez les
+variables d'environnement (`TELEGRAM_BOT_TOKEN`, `APIFOOTBALL_API_KEY`,
+`ADMIN_IDS`) et déployez le `Dockerfile`. Vérifiez que le service reste actif
+en continu (évitez les offres qui « endorment » les apps inactives).
+
+### Options manuelles (avancé)
 
 **Option A — script auto-redémarrage** (simple) :
 ```bash
