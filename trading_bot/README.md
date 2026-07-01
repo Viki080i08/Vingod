@@ -13,8 +13,12 @@ identifier des configurations de marché intéressantes en temps réel sur les
 
 ## ✨ Fonctionnalités
 
-- **Données temps réel** : prix, volumes, volatilité (ATR), tendances (crypto via
-  l'API publique Binance ; forex / actions / indices via Twelve Data ou Alpha Vantage).
+- **Données temps réel** sans clé API :
+  - **Crypto** (1000+ paires Binance + 10 000+ via CoinGecko) — tapez `BTC`, `ETH`, `PEPE` ou `BTCUSDT`
+  - **Actions** (AAPL, TSLA, NVDA…) via Yahoo Finance
+  - **Forex** (EURUSD, GBPUSD, XAUUSD…) via Yahoo Finance
+  - **Indices** (SPX, NAS100, DAX…) via Yahoo Finance
+  - Optionnel : Twelve Data si `TWELVE_DATA_API_KEY` est configurée
 - **Actualités & sentiment** : agrégation de news (NewsAPI ou flux RSS publics) avec
   analyse de sentiment (VADER + lexique financier).
 - **Calendrier économique** : événements macro importants à venir.

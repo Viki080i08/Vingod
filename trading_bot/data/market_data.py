@@ -1,13 +1,17 @@
-"""Real-time market data acquisition.
+"""Real-time market data acquisition — multi-provider, no API key required.
 
-Crypto uses the Binance public REST API (no API key required).
-Forex / stocks / indices use Twelve Data or Alpha Vantage if a key is set,
-otherwise the caller receives ``None`` and can render a graceful message.
+Provider chain (automatic fallback):
+  Crypto   → Binance (1000+ paires) → CoinGecko (10 000+ cryptos)
+  Actions  → Yahoo Finance
+  Forex    → Yahoo Finance
+  Indices  → Yahoo Finance
+  Optionnel → Twelve Data si ``TWELVE_DATA_API_KEY`` est configurée
 """
 from __future__ import annotations
 
 import logging
-from typing import Optional
+import time
+from typing import Optional, Set
 
 import httpx
 import pandas as pd
@@ -15,21 +19,18 @@ import pandas as pd
 from ..config import settings
 from ..models import AssetClass, MarketData, Quote
 from . import symbols
+from .coingecko import coingecko_provider
+from .yahoo_finance import yahoo_provider
 
 logger = logging.getLogger(__name__)
 
-# Public market-data hosts, tried in order. ``data-api.binance.vision`` is the
-# official read-only data endpoint and is not geo-restricted, so it works from
-# cloud regions where ``api.binance.com`` returns HTTP 451.
 BINANCE_HOSTS = (
     "https://data-api.binance.vision",
     "https://api.binance.com",
     "https://api-gcp.binance.com",
 )
 TWELVE_DATA_BASE = "https://api.twelvedata.com"
-ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query"
 
-# Map our generic timeframe labels to provider-specific interval strings.
 _BINANCE_INTERVALS = {"15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d"}
 _TWELVE_INTERVALS = {"15m": "15min", "1h": "1h", "4h": "4h", "1d": "1day"}
 
@@ -39,34 +40,54 @@ class MarketDataError(RuntimeError):
 
 
 class MarketDataProvider:
-    """Fetches quotes and OHLCV candles across asset classes."""
-
     def __init__(self, timeout: float = 15.0) -> None:
         self._timeout = timeout
+        self._binance_symbols: Optional[Set[str]] = None
+        self._binance_cache_ts: float = 0.0
 
     async def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=self._timeout, headers={"User-Agent": "trading-ai-bot/1.0"})
 
     async def _binance_get(self, path: str, params: dict | None = None):
-        """GET a Binance endpoint, falling back across hosts on failure."""
         last_status = None
         async with await self._client() as client:
             for host in BINANCE_HOSTS:
                 try:
                     resp = await client.get(f"{host}{path}", params=params)
-                except httpx.HTTPError as exc:  # pragma: no cover - network dependent
+                except httpx.HTTPError as exc:  # pragma: no cover
                     last_status = str(exc)
                     continue
                 if resp.status_code == 200:
                     return resp.json()
                 last_status = resp.status_code
-        raise MarketDataError(f"Binance request {path} failed (last status: {last_status}).")
+        raise MarketDataError(f"Binance indisponible ({last_status}).")
 
-    # ------------------------------------------------------------------ crypto
-    async def _binance_quote(self, symbol: str) -> Quote:
-        d = await self._binance_get("/api/v3/ticker/24hr", params={"symbol": symbol})
+    async def _load_binance_symbols(self) -> Set[str]:
+        if self._binance_symbols and time.monotonic() - self._binance_cache_ts < 3600:
+            return self._binance_symbols
+        info = await self._binance_get("/api/v3/exchangeInfo")
+        self._binance_symbols = {
+            s["symbol"]
+            for s in info.get("symbols", [])
+            if s.get("status") == "TRADING" and s.get("quoteAsset") in ("USDT", "USDC", "BUSD", "FDUSD", "BTC", "ETH")
+        }
+        self._binance_cache_ts = time.monotonic()
+        logger.info("Binance: %d paires chargées", len(self._binance_symbols))
+        return self._binance_symbols
+
+    async def resolve_binance_pair(self, symbol: str) -> Optional[str]:
+        """Map user input (BTC, PEPE, BTCUSDT…) to a valid Binance pair."""
+        available = await self._load_binance_symbols()
+        for candidate in symbols.crypto_pair_candidates(symbol):
+            if candidate in available:
+                return candidate
+        return None
+
+    # ------------------------------------------------------------------ Binance
+    async def _binance_quote(self, pair: str) -> Quote:
+        d = await self._binance_get("/api/v3/ticker/24hr", params={"symbol": pair})
         return Quote(
-            symbol=symbol,
+            symbol=pair,
             asset_class=AssetClass.CRYPTO,
             price=float(d["lastPrice"]),
             change_pct_24h=float(d["priceChangePercent"]),
@@ -75,11 +96,11 @@ class MarketDataProvider:
             low_24h=float(d["lowPrice"]),
         )
 
-    async def _binance_candles(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    async def _binance_candles(self, pair: str, timeframe: str, limit: int) -> pd.DataFrame:
         interval = _BINANCE_INTERVALS.get(timeframe, "1h")
         raw = await self._binance_get(
             "/api/v3/klines",
-            params={"symbol": symbol, "interval": interval, "limit": min(limit, 1000)},
+            params={"symbol": pair, "interval": interval, "limit": min(limit, 1000)},
         )
         rows = [
             {
@@ -92,10 +113,38 @@ class MarketDataProvider:
             }
             for item in raw
         ]
-        df = pd.DataFrame(rows).set_index("time")
-        return df
+        return pd.DataFrame(rows).set_index("time")
 
-    # ----------------------------------------------------------- twelve data
+    # ----------------------------------------------------------- CoinGecko
+    async def _coingecko_quote(self, symbol: str) -> Quote:
+        base = symbols.base_ticker(symbol)
+        price, change, _, _ = await coingecko_provider.quote(base)
+        return Quote(
+            symbol=base,
+            asset_class=AssetClass.CRYPTO,
+            price=price,
+            change_pct_24h=change,
+        )
+
+    async def _coingecko_candles(self, symbol: str, timeframe: str) -> pd.DataFrame:
+        base = symbols.base_ticker(symbol)
+        days = {"15m": 7, "1h": 30, "4h": 90, "1d": 365}.get(timeframe, 30)
+        return await coingecko_provider.candles(base, days=days)
+
+    # --------------------------------------------------------- Yahoo Finance
+    async def _yahoo_quote(self, symbol: str, asset_class: AssetClass) -> Quote:
+        price, change = await yahoo_provider.quote(symbol, asset_class)
+        return Quote(
+            symbol=symbols.normalize(symbol),
+            asset_class=asset_class,
+            price=price,
+            change_pct_24h=change,
+        )
+
+    async def _yahoo_candles(self, symbol: str, asset_class: AssetClass, timeframe: str) -> pd.DataFrame:
+        return await yahoo_provider.candles(symbol, asset_class, timeframe)
+
+    # ----------------------------------------------------------- Twelve Data
     async def _twelve_quote(self, symbol: str, asset_class: AssetClass) -> Quote:
         api_symbol = self._twelve_symbol(symbol, asset_class)
         async with await self._client() as client:
@@ -105,9 +154,9 @@ class MarketDataProvider:
             )
             d = resp.json()
         if "close" not in d:
-            raise MarketDataError(f"Twelve Data quote failed for {symbol}: {d.get('message', d)}")
+            raise MarketDataError(f"Twelve Data : {d.get('message', d)}")
         return Quote(
-            symbol=symbol,
+            symbol=symbols.normalize(symbol),
             asset_class=asset_class,
             price=float(d["close"]),
             change_pct_24h=float(d.get("percent_change", 0) or 0),
@@ -133,7 +182,7 @@ class MarketDataProvider:
             )
             d = resp.json()
         if "values" not in d:
-            raise MarketDataError(f"Twelve Data series failed for {symbol}: {d.get('message', d)}")
+            raise MarketDataError(f"Twelve Data : {d.get('message', d)}")
         rows = [
             {
                 "time": pd.to_datetime(v["datetime"], utc=True),
@@ -145,8 +194,7 @@ class MarketDataProvider:
             }
             for v in d["values"]
         ]
-        df = pd.DataFrame(rows).set_index("time").sort_index()
-        return df
+        return pd.DataFrame(rows).set_index("time").sort_index()
 
     @staticmethod
     def _twelve_symbol(symbol: str, asset_class: AssetClass) -> str:
@@ -155,30 +203,65 @@ class MarketDataProvider:
             return f"{base}/{quote}"
         return symbols.normalize(symbol)
 
-    # ------------------------------------------------------------- public api
+    # ------------------------------------------------------------- public API
     async def get_quote(self, symbol: str) -> Quote:
         asset_class = symbols.classify(symbol)
         norm = symbols.normalize(symbol)
+
         if asset_class == AssetClass.CRYPTO:
-            return await self._binance_quote(norm)
-        if settings.twelve_data_api_key:
-            return await self._twelve_quote(norm, asset_class)
-        raise MarketDataError(
-            f"No data provider configured for {symbol} ({asset_class.value}). "
-            "Set TWELVE_DATA_API_KEY to enable forex/stocks/indices."
-        )
+            pair = await self.resolve_binance_pair(symbol)
+            if pair:
+                return await self._binance_quote(pair)
+            try:
+                return await self._coingecko_quote(symbol)
+            except Exception as exc:
+                raise MarketDataError(
+                    f"Crypto « {norm} » introuvable. Essayez avec le suffixe USDT "
+                    f"(ex: {symbols.base_ticker(norm)}USDT) ou vérifiez l'orthographe."
+                ) from exc
+
+        # Stocks / forex / indices → Yahoo (gratuit).
+        try:
+            return await self._yahoo_quote(symbol, asset_class)
+        except Exception as yahoo_exc:
+            if settings.twelve_data_api_key:
+                try:
+                    return await self._twelve_quote(symbol, asset_class)
+                except Exception:
+                    pass
+            raise MarketDataError(
+                f"Actif « {norm} » ({asset_class.value}) introuvable. "
+                f"Exemples valides : AAPL, TSLA, EURUSD, SPX, BTC, ETH, SOL, PEPE. "
+                f"Détail : {yahoo_exc}"
+            ) from yahoo_exc
 
     async def get_candles(self, symbol: str, timeframe: str = "1h", limit: int = 300) -> pd.DataFrame:
         asset_class = symbols.classify(symbol)
         norm = symbols.normalize(symbol)
+
         if asset_class == AssetClass.CRYPTO:
-            return await self._binance_candles(norm, timeframe, limit)
-        if settings.twelve_data_api_key:
-            return await self._twelve_candles(norm, asset_class, timeframe, limit)
-        raise MarketDataError(
-            f"No data provider configured for {symbol} ({asset_class.value}). "
-            "Set TWELVE_DATA_API_KEY to enable forex/stocks/indices."
-        )
+            pair = await self.resolve_binance_pair(symbol)
+            if pair:
+                return await self._binance_candles(pair, timeframe, limit)
+            try:
+                return await self._coingecko_candles(symbol, timeframe)
+            except Exception as exc:
+                raise MarketDataError(
+                    f"Pas de données historiques pour « {norm} ». "
+                    f"Essayez {symbols.base_ticker(norm)}USDT."
+                ) from exc
+
+        try:
+            return await self._yahoo_candles(symbol, asset_class, timeframe)
+        except Exception as yahoo_exc:
+            if settings.twelve_data_api_key:
+                try:
+                    return await self._twelve_candles(symbol, asset_class, timeframe, limit)
+                except Exception:
+                    pass
+            raise MarketDataError(
+                f"Pas de données pour « {norm} » ({asset_class.value}). Détail : {yahoo_exc}"
+            ) from yahoo_exc
 
     async def get_market_data(
         self, symbol: str, timeframe: str = "1h", limit: int = 300
@@ -187,21 +270,19 @@ class MarketDataProvider:
         quote = await self.get_quote(symbol)
         candles = await self.get_candles(symbol, timeframe=timeframe, limit=limit)
         return MarketData(
-            symbol=symbols.normalize(symbol),
+            symbol=quote.symbol,
             asset_class=asset_class,
             quote=quote,
             candles=candles,
         )
 
     async def get_top_movers(self, quote_currency: str = "USDT", limit: int = 20) -> list[Quote]:
-        """Return the most active crypto pairs by 24h quote volume."""
         data = await self._binance_get("/api/v3/ticker/24hr")
         quotes: list[Quote] = []
         for d in data:
             sym = d.get("symbol", "")
             if not sym.endswith(quote_currency):
                 continue
-            # Skip leveraged tokens and low quality pairs.
             if any(token in sym for token in ("UP", "DOWN", "BULL", "BEAR")):
                 continue
             try:

@@ -24,7 +24,9 @@ def test_position_size_rejects_bad_input():
 
 def test_symbol_classification():
     assert symbols.classify("BTCUSDT") == AssetClass.CRYPTO
-    assert symbols.classify("ETHUSDC") == AssetClass.CRYPTO
+    assert symbols.classify("BTC") == AssetClass.CRYPTO
+    assert symbols.classify("ETH") == AssetClass.CRYPTO
+    assert symbols.classify("PEPE") == AssetClass.CRYPTO
     assert symbols.classify("EURUSD") == AssetClass.FOREX
     assert symbols.classify("AAPL") == AssetClass.STOCK
     assert symbols.classify("US500") == AssetClass.INDEX
