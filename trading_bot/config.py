@@ -11,9 +11,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
+_PACKAGE_DIR = Path(__file__).resolve().parent
+
 try:
     from dotenv import load_dotenv
 
+    # Load .env from the trading_bot package dir first (works no matter where
+    # you launch `python -m trading_bot.main` from), then allow CWD overrides.
+    load_dotenv(_PACKAGE_DIR / ".env")
     load_dotenv()
 except Exception:  # pragma: no cover - dotenv is optional at runtime
     pass
@@ -72,7 +77,11 @@ class Settings:
     rate_limit_max_calls: int = field(default_factory=lambda: _get_int("RATE_LIMIT_MAX_CALLS", 20))
     rate_limit_window_seconds: int = field(default_factory=lambda: _get_int("RATE_LIMIT_WINDOW_SECONDS", 60))
 
-    database_path: str = field(default_factory=lambda: os.getenv("DATABASE_PATH", "trading_bot.db").strip())
+    database_path: str = field(
+        default_factory=lambda: os.getenv(
+            "DATABASE_PATH", str(_PACKAGE_DIR / "trading_bot.db")
+        ).strip()
+    )
     default_watchlist: List[str] = field(
         default_factory=lambda: _get_list("DEFAULT_WATCHLIST")
         or ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]

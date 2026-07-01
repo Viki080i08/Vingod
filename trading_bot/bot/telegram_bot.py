@@ -5,13 +5,15 @@ import functools
 import logging
 from typing import Callable, List
 
-from telegram import Update
+from telegram import BotCommand, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     ApplicationBuilder,
     CommandHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
 from ..ai.engine import ai_engine
@@ -75,8 +77,18 @@ def guarded(func: Callable) -> Callable:
     @functools.wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
-        if user is None:
+        message = update.effective_message
+        if user is None or message is None:
+            logger.warning("Update without user/message ignored: %s", update)
             return
+
+        logger.info(
+            "Commande reçue: /%s de %s (id=%s)",
+            func.__name__.removeprefix("cmd_"),
+            user.username or user.first_name,
+            user.id,
+        )
+
         db = get_db()
         await db.upsert_user(
             user.id, user.username or "", user.first_name or "", is_admin(user.id)
@@ -87,17 +99,17 @@ def guarded(func: Callable) -> Callable:
 
         if not is_admin(user.id) and not rate_limiter.check(user.id):
             wait = rate_limiter.retry_after(user.id)
-            await update.effective_message.reply_text(
+            await message.reply_text(
                 f"⏳ Trop de requêtes. Réessayez dans {wait}s (anti-spam)."
             )
             return
         try:
             await func(update, context)
         except MarketDataError as exc:
-            await update.effective_message.reply_text(f"⚠️ {exc}")
+            await message.reply_text(f"⚠️ {exc}")
         except Exception:  # pragma: no cover - defensive top-level guard
             logger.exception("Handler %s failed", func.__name__)
-            await update.effective_message.reply_text(
+            await message.reply_text(
                 "❌ Une erreur interne est survenue. Réessayez plus tard."
             )
 
@@ -105,9 +117,19 @@ def guarded(func: Callable) -> Callable:
 
 
 async def _reply(update: Update, text: str, disable_preview: bool = True) -> None:
-    await update.effective_message.reply_text(
-        text, parse_mode=ParseMode.HTML, disable_web_page_preview=disable_preview
-    )
+    message = update.effective_message
+    if message is None:
+        return
+    try:
+        await message.reply_text(
+            text, parse_mode=ParseMode.HTML, disable_web_page_preview=disable_preview
+        )
+    except Exception:
+        # Fallback if Telegram rejects HTML formatting.
+        logger.warning("HTML reply failed, sending plain text", exc_info=True)
+        plain = text.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
+        plain = plain.replace("<code>", "").replace("</code>", "")
+        await message.reply_text(plain, disable_web_page_preview=disable_preview)
 
 
 # --------------------------------------------------------------------- handlers
@@ -134,7 +156,6 @@ async def cmd_analyse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     msg = await update.effective_message.reply_text("🔎 Analyse en cours…")
     analysis = await ai_engine.analyze_symbol(symbol, timeframe=timeframe)
-    # Record the signal so the learning system can track it later.
     try:
         await get_db().record_prediction(analysis.signal)
     except Exception:  # pragma: no cover
@@ -356,9 +377,53 @@ async def learning_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Learning job failed")
 
 
+async def cmd_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Reply when the user sends plain text instead of a command."""
+    user = update.effective_user
+    message = update.effective_message
+    if user is None or message is None:
+        return
+    logger.info("Message texte de %s (id=%s): %s", user.username or user.first_name, user.id, message.text)
+    await message.reply_text(
+        "👋 Bonjour ! Je suis l'assistant IA de trading.\n\n"
+        "Tapez /start pour commencer ou /aide pour la liste des commandes.\n\n"
+        "Exemples :\n"
+        "• /analyse BTCUSDT\n"
+        "• /signaux\n"
+        "• /news bitcoin"
+    )
+
+
+async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.exception("Erreur Telegram non gérée", exc_info=context.error)
+
+
+BOT_COMMANDS = [
+    BotCommand("start", "Démarrer le bot"),
+    BotCommand("analyse", "Analyser un actif (ex: BTCUSDT)"),
+    BotCommand("signaux", "Meilleures opportunités IA"),
+    BotCommand("top", "Top trades par score"),
+    BotCommand("news", "Actualités + sentiment"),
+    BotCommand("calendrier", "Événements économiques"),
+    BotCommand("risque", "Calcul taille de position"),
+    BotCommand("portfolio", "Suivi portefeuille"),
+    BotCommand("alertes", "Alertes auto on/off"),
+    BotCommand("perf", "Performance de l'IA"),
+    BotCommand("aide", "Aide détaillée"),
+]
+
+
 async def _post_init(app: Application) -> None:
     await get_db().init()
     logger.info("Database initialised at %s", settings.database_path)
+
+    me = await app.bot.get_me()
+    await app.bot.set_my_commands(BOT_COMMANDS)
+    await app.bot.delete_webhook(drop_pending_updates=False)
+
+    print(f"✓ Bot connecté : @{me.username} ({me.first_name})", flush=True)
+    print("✓ En écoute — ouvrez Telegram et tapez /start\n", flush=True)
+    logger.info("Bot ready: @%s (id=%s)", me.username, me.id)
 
 
 def build_application() -> Application:
@@ -382,6 +447,10 @@ def build_application() -> Application:
     app.add_handler(CommandHandler(["alertes", "alerts"], cmd_alertes))
     app.add_handler(CommandHandler("perf", cmd_perf))
     app.add_handler(CommandHandler("stats", cmd_stats))
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_fallback),
+    )
+    app.add_error_handler(_on_error)
 
     if app.job_queue is not None:
         app.job_queue.run_repeating(
