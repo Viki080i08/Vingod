@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>💳 Paiements ({{ rows|length }})</h2>
+<table>
+    <thead>
+        <tr><th>Date</th><th>Telegram ID</th><th>Montant</th><th>Fournisseur</th><th>Durée</th></tr>
+    </thead>
+    <tbody>
+        {% for p in rows %}
+        <tr>
+            <td class="muted">{{ p.created.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td>{{ p.telegram_id }}</td>
+            <td><b>{{ '%.2f'|format(p.amount) }} {{ p.currency }}</b></td>
+            <td>{{ p.provider }}</td>
+            <td>{{ p.days }} j</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Aucun paiement enregistré.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

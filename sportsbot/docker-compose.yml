@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prono
+      POSTGRES_PASSWORD: prono
+      POSTGRES_DB: prono
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prono"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Override the DB URL so the container talks to the postgres service.
+      DATABASE_URL: postgresql+psycopg2://prono:prono@db:5432/prono
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>👥 Utilisateurs ({{ rows|length }})</h2>
+<table>
+    <thead>
+        <tr><th>Telegram ID</th><th>Nom</th><th>Username</th><th>Profil</th>
+            <th>Abonnement</th><th>Expiration</th><th>Inscrit le</th></tr>
+    </thead>
+    <tbody>
+        {% for u in rows %}
+        <tr>
+            <td>{{ u.telegram_id }}</td>
+            <td>{{ u.first_name or '—' }}</td>
+            <td>{{ '@' ~ u.username if u.username else '—' }}</td>
+            <td>{{ u.profile }}</td>
+            <td>
+                {% if u.active %}<span class="badge green">Actif</span>
+                {% elif u.status == 'expired' %}<span class="badge yellow">Expiré</span>
+                {% else %}<span class="badge red">Aucun</span>{% endif %}
+            </td>
+            <td class="muted">{{ u.expiry.strftime('%d/%m/%Y') if u.expiry else '—' }}</td>
+            <td class="muted">{{ u.created.strftime('%d/%m/%Y') if u.created else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">Aucun utilisateur pour le moment.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>📊 Tableau de bord</h2>
+<div class="cards">
+    <div class="card">
+        <div class="label">Utilisateurs</div>
+        <div class="value">{{ total_users }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Abonnés actifs</div>
+        <div class="value">{{ active_subs }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Matchs à venir (5j)</div>
+        <div class="value">{{ upcoming }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Taux de réussite global</div>
+        <div class="value">{{ global_stats.win_rate }}%</div>
+    </div>
+</div>
+
+<h2>🎯 Performance par profil</h2>
+<table>
+    <thead>
+        <tr><th>Profil</th><th>Pronostics</th><th>Réglés</th><th>Gagnés</th>
+            <th>Perdus</th><th>Réussite</th><th>ROI</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>🌍 Global</td>
+            <td>{{ global_stats.total }}</td>
+            <td>{{ global_stats.settled }}</td>
+            <td>{{ global_stats.won }}</td>
+            <td>{{ global_stats.lost }}</td>
+            <td>{{ global_stats.win_rate }}%</td>
+            <td>{{ global_stats.roi }}%</td>
+        </tr>
+        {% for profile, s in per_profile.items() %}
+        <tr>
+            <td>{{ profile_labels[profile] }}</td>
+            <td>{{ s.total }}</td>
+            <td>{{ s.settled }}</td>
+            <td>{{ s.won }}</td>
+            <td>{{ s.lost }}</td>
+            <td>{{ s.win_rate }}%</td>
+            <td>{{ s.roi }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

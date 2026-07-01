@@ -1,0 +1,33 @@
+# Service systemd pour faire tourner PronoIA en continu (24/7) sur un serveur Linux.
+#
+# Installation :
+#   1) Copiez le projet dans /opt/pronoia/sportsbot
+#   2) Créez le venv et installez les dépendances :
+#        cd /opt/pronoia/sportsbot && python3 -m venv .venv \
+#          && .venv/bin/pip install -r requirements.txt
+#   3) Créez le fichier .env (avec un TOKEN VALIDE).
+#   4) sudo cp deploy/pronoia.service /etc/systemd/system/pronoia.service
+#   5) sudo systemctl daemon-reload && sudo systemctl enable --now pronoia
+#   6) Logs : journalctl -u pronoia -f
+#
+# Le service redémarre automatiquement en cas d'arrêt et au boot de la machine,
+# il tourne donc "tout le temps jusqu'à désactivation" (systemctl stop pronoia).
+
+[Unit]
+Description=PronoIA - Bot Telegram de pronostics sportifs (IA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pronoia/sportsbot
+EnvironmentFile=/opt/pronoia/sportsbot/.env
+ExecStart=/opt/pronoia/sportsbot/.venv/bin/python -m sportsbot all
+Restart=always
+RestartSec=5
+# Décommentez et adaptez si vous créez un utilisateur dédié :
+# User=pronoia
+# Group=pronoia
+
+[Install]
+WantedBy=multi-user.target
