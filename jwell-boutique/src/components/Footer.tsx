@@ -1,13 +1,25 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MapPin, Phone, Clock, Star } from "lucide-react";
 import { SHOP } from "@/lib/constants";
+import type { GoogleReviewsData } from "@/lib/google-reviews";
 
 export function Footer() {
   const pathname = usePathname();
+  const [reviews, setReviews] = useState<GoogleReviewsData | null>(null);
+
+  useEffect(() => {
+    fetch("/api/reviews")
+      .then((r) => r.json())
+      .then(setReviews)
+      .catch(() => null);
+  }, []);
+
   if (pathname.startsWith("/vendeur")) return null;
+
   return (
     <footer id="contact" className="bg-stone-900 text-stone-300">
       <div className="mx-auto max-w-7xl px-4 py-12">
@@ -15,11 +27,15 @@ export function Footer() {
           <div>
             <h3 className="mb-3 text-lg font-bold text-white">{SHOP.name}</h3>
             <p className="mb-4 text-sm text-stone-400">{SHOP.tagline}</p>
-            <div className="flex items-center gap-1 text-amber-400">
-              <Star className="h-4 w-4 fill-current" />
-              <span className="text-sm font-medium">{SHOP.rating}/5</span>
-              <span className="text-sm text-stone-500">({SHOP.reviewCount} avis Google)</span>
-            </div>
+            {reviews && reviews.reviewCount > 0 && (
+              <div className="flex items-center gap-1 text-amber-400">
+                <Star className="h-4 w-4 fill-current" />
+                <span className="text-sm font-medium">{reviews.rating}/5</span>
+                <span className="text-sm text-stone-500">
+                  ({reviews.reviewCount} avis Google)
+                </span>
+              </div>
+            )}
           </div>
 
           <div>
@@ -62,6 +78,16 @@ export function Footer() {
                   className="hover:text-white"
                 >
                   Obtenir l&apos;itinéraire
+                </a>
+              </li>
+              <li>
+                <a
+                  href={SHOP.mapsReviewsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white"
+                >
+                  Nos avis Google
                 </a>
               </li>
               <li>

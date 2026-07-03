@@ -8,11 +8,12 @@ export const SHOP = {
   fullAddress: "Av. de Clermont Ferrand, 63200 Ménétrol, France",
   phone: "09 83 90 82 76",
   phoneHref: "tel:+33983908276",
-  rating: 4.6,
-  reviewCount: 9,
-  hours: "Lun–Sam : 10h–19h",
+  hours: "Lun–Sam : 9h30–19h30",
+  googleSearchQuery: "The vape shop by jwell FDJ Av. de Clermont Ferrand 63200 Ménétrol",
   mapsUrl:
-    "https://www.google.com/maps/dir/?api=1&destination=Av.+de+Clermont+Ferrand,+63200+Ménétrol,+France",
+    "https://www.google.com/maps/search/The+vape+shop+by+jwell+FDJ+Av.+de+Clermont+Ferrand+63200+M%C3%A9n%C3%A9trol",
+  mapsReviewsUrl:
+    "https://www.google.com/maps/search/The+vape+shop+by+jwell+FDJ+Av.+de+Clermont+Ferrand+63200+M%C3%A9n%C3%A9trol",
   mapsEmbed:
     "https://maps.google.com/maps?q=Av.+de+Clermont+Ferrand,+63200+Ménétrol,+France&output=embed",
 } as const;

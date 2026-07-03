@@ -12,6 +12,7 @@ Site e-commerce complet pour la boutique **The Vape Shop by Jwell FDJ** à Mén�
 - Panier et commande en ligne
 - Paiement sécurisé via **Stripe**
 - Adresse, téléphone et lien **Google Maps** pour l'itinéraire
+- Avis **Google réels** (note, avis clients) synchronisés via API
 - Avertissement +18 ans
 
 ### Espace vendeur (`/vendeur/login`)
@@ -36,9 +37,24 @@ npm run dev
 
 Ouvrez [http://localhost:3000](http://localhost:3000)
 
-### Identifiants vendeur (démo)
-- **Email** : `vendeur@jwell-fdj.fr`
-- **Mot de passe** : `jwell2024`
+### Identifiants vendeur
+
+Le compte vendeur est créé via `npm run db:setup`. Configurez dans `.env` :
+
+```
+SELLER_EMAIL=vendeur@jwell-fdj.fr
+SELLER_PASSWORD=votre-mot-de-passe
+```
+
+### Avis Google (données réelles)
+
+Pour afficher les **vrais avis Google** sur le site :
+
+1. Créez une clé API sur [Google Cloud Console](https://console.cloud.google.com/) avec l'API **Places (New)** activée
+2. Ajoutez dans `.env` : `GOOGLE_PLACES_API_KEY=votre_cle`
+3. Lancez : `npm run sync:reviews`
+
+Les avis (note, nombre, textes) seront récupérés directement depuis Google Maps et affichés sur le site.
 
 ## Configuration
 
@@ -48,6 +64,9 @@ Ouvrez [http://localhost:3000](http://localhost:3000)
 | `STRIPE_SECRET_KEY` | Clé secrète Stripe (live ou test) |
 | `STRIPE_WEBHOOK_SECRET` | Secret webhook Stripe pour confirmer les paiements |
 | `JWT_SECRET` | Secret pour l'authentification vendeur |
+| `SELLER_EMAIL` / `SELLER_PASSWORD` | Identifiants du compte vendeur |
+| `GOOGLE_PLACES_API_KEY` | Clé API Google Places — pour les vrais avis Google |
+| `GOOGLE_PLACE_ID` | Optionnel — ID du lieu Google |
 | `OPENAI_API_KEY` | Optionnel — active l'analyse IA des photos produits |
 | `NEXT_PUBLIC_APP_URL` | URL publique du site (ex: `https://votre-domaine.fr`) |
 
@@ -72,7 +91,7 @@ Pour que les commandes passent automatiquement en « Payée » et que le stock s
 
 - **Adresse** : Av. de Clermont Ferrand, 63200 Ménétrol, France
 - **Téléphone** : 09 83 90 82 76
-- **Horaires** : Lun–Sam 10h–19h
+- **Horaires** : Lun–Sam 9h30–19h30
 
 ## Sécurité
 

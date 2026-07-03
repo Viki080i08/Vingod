@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:setup": "prisma migrate dev && npx tsx prisma/seed.ts",
+    "sync:reviews": "npx tsx scripts/sync-google-reviews.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

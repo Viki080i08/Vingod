@@ -39,3 +39,6 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Google reviews cache (synced from API)
+data/google-reviews-cache.json

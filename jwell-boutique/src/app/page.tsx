@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { MapPin, Phone, Star, ShoppingBag, Shield, Truck } from "lucide-react";
+import { MapPin, Phone, ShoppingBag, Shield, Truck } from "lucide-react";
 import { SHOP } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { ProductCard } from "@/components/ProductCard";
+import { GoogleReviews } from "@/components/GoogleReviews";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -34,17 +35,7 @@ export default async function HomePage() {
               résistances et accessoires — en magasin ou en ligne.
             </p>
             <div className="mb-8 flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-1 text-amber-400">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`h-4 w-4 ${i < Math.floor(SHOP.rating) ? "fill-current" : ""}`}
-                  />
-                ))}
-                <span className="ml-1 text-sm text-stone-300">
-                  {SHOP.rating}/5 ({SHOP.reviewCount} avis)
-                </span>
-              </div>
+              <GoogleReviews variant="hero" />
             </div>
             <div className="flex flex-wrap gap-3">
               <Link href="/produits">
@@ -110,6 +101,8 @@ export default async function HomePage() {
           )}
         </div>
       </section>
+
+      <GoogleReviews />
 
       {/* Location */}
       <section className="bg-white py-16">
