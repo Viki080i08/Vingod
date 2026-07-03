@@ -37,13 +37,13 @@ npm run dev
 
 Ouvrez [http://localhost:3000](http://localhost:3000)
 
-### Identifiants vendeur
+### Connexion vendeur
 
-Le compte vendeur est créé via `npm run db:setup`. Configurez dans `.env` :
+Un simple **code d'accès** suffit (par défaut : `123456789`).
 
+Configurez dans `.env` :
 ```
-SELLER_EMAIL=vendeur@jwell-fdj.fr
-SELLER_PASSWORD=votre-mot-de-passe
+SELLER_CODE=123456789
 ```
 
 ### Avis Google (données réelles)
@@ -64,7 +64,7 @@ Les avis (note, nombre, textes) seront récupérés directement depuis Google Ma
 | `STRIPE_SECRET_KEY` | Clé secrète Stripe (live ou test) |
 | `STRIPE_WEBHOOK_SECRET` | Secret webhook Stripe pour confirmer les paiements |
 | `JWT_SECRET` | Secret pour l'authentification vendeur |
-| `SELLER_EMAIL` / `SELLER_PASSWORD` | Identifiants du compte vendeur |
+| `SELLER_CODE` | Code d'accès espace vendeur (défaut : `123456789`) |
 | `GOOGLE_PLACES_API_KEY` | Clé API Google Places — pour les vrais avis Google |
 | `GOOGLE_PLACE_ID` | Optionnel — ID du lieu Google |
 | `OPENAI_API_KEY` | Optionnel — active l'analyse IA des photos produits |

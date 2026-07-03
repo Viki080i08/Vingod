@@ -9,8 +9,7 @@ import { Input } from "@/components/ui/Input";
 
 export default function VendeurLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +22,7 @@ export default function VendeurLoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ code }),
       });
 
       const data = await res.json();
@@ -45,37 +44,31 @@ export default function VendeurLoginPage() {
             JW
           </div>
           <h1 className="text-2xl font-bold text-stone-900">Espace vendeur</h1>
-          <p className="text-stone-500">Gérez vos produits, stocks et ventes</p>
+          <p className="text-stone-500">Entrez votre code d&apos;accès</p>
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 space-y-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Email</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="vendeur@jwell-fdj.fr"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Mot de passe</label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium">Code d&apos;accès</label>
+            <Input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              required
+              placeholder="•••••••••"
+              className="text-center text-2xl tracking-[0.3em]"
+              autoComplete="off"
+              maxLength={20}
+            />
           </div>
 
-          {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+          {error && <p className="mb-3 text-center text-sm text-red-600">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            <LogIn className="h-4 w-4" />
-            {loading ? "Connexion..." : "Se connecter"}
+          <Button type="submit" className="w-full" size="lg" disabled={loading || code.length < 4}>
+            <LogIn className="h-5 w-5" />
+            {loading ? "Connexion..." : "Entrer"}
           </Button>
         </form>
 

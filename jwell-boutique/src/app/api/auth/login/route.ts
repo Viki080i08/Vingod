@@ -1,21 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signToken } from "@/lib/auth";
 
+const SELLER_CODE = process.env.SELLER_CODE || "123456789";
+const SELLER_EMAIL = process.env.SELLER_EMAIL || "vendeur@jwell-fdj.fr";
+
+async function getOrCreateSeller() {
+  let seller = await prisma.seller.findUnique({ where: { email: SELLER_EMAIL } });
+  if (!seller) {
+    seller = await prisma.seller.create({
+      data: {
+        email: SELLER_EMAIL,
+        password: "code-auth",
+        name: "Gérant Jwell FDJ",
+      },
+    });
+  }
+  return seller;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
+    const { code } = await req.json();
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email et mot de passe requis" }, { status: 400 });
+    if (!code) {
+      return NextResponse.json({ error: "Code requis" }, { status: 400 });
     }
 
-    const seller = await prisma.seller.findUnique({ where: { email } });
-    if (!seller || !(await bcrypt.compare(password, seller.password))) {
-      return NextResponse.json({ error: "Identifiants incorrects" }, { status: 401 });
+    if (code.trim() !== SELLER_CODE) {
+      return NextResponse.json({ error: "Code incorrect" }, { status: 401 });
     }
 
+    const seller = await getOrCreateSeller();
     const token = signToken({ sellerId: seller.id, email: seller.email });
 
     const response = NextResponse.json({
